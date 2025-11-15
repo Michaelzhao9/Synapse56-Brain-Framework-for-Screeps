@@ -59,3 +59,67 @@ mountModule({
 - 想加新的环境刺激，就往 `coordinator.getContext()` 中追加字段。
 - 需要模块优先级时，给 `moduleRegistry` 的条目自行排序或加一个 `order` 字段。
 - 已在 `brainRunner` 中加了 per-module `try/catch`，单个模块崩溃只会打印日志，不会拖垮整帧。
+
+---
+
+## Synapse56 Brain Framework (English)
+
+> Biology analogy: `brainMain` is the heartbeat, `brainRunner` is the cortex, `coordinator` is the thalamus.
+> Each business module is a “neural bundle” that moves its own muscles without interfering with others.
+
+### Quick Integration (as a createApp plugin)
+
+```ts
+import { brainAppPlugin } from "@/brainFramework/appPlugin"
+
+const app = createApp({ roomRunner, creepRunner })
+
+app.on(brainAppPlugin()) // same effect as app.on(creepListener)
+```
+
+The plugin calls `brainMain.run()` during `tickStart`, so no manual change to `loop` is needed. Keeping the legacy direct call is also fine:
+
+```ts
+import { brainMain } from "@/brainFramework/brainMain"
+
+export const loop = () => brainMain.run()
+```
+
+Once the heartbeat fires, it does three things:
+
+1. `cpuTracker` records total frame cost under the `TOTAL` label.
+2. `brainRunner` reads `coordinator.getContext()` (tick number, hostile presence, etc.).
+3. Iterates through modules in `moduleRegistry`; only when `manager.shouldRun(context)` returns true will it execute `brain.run()` and log the CPU for that label.
+
+### Writing a Neural Module
+
+```ts
+import { mountModule } from "@/brainFramework/moduleRegistry"
+
+mountModule({
+    label: "helper",
+    manager: {
+        shouldRun(context) {
+            return context.tick % 2 === 0
+        },
+    },
+    brain: {
+        run() {
+            // actual business logic
+        },
+    },
+})
+```
+
+- `manager` (thalamus) only decides whether to run and reads shared info from `context`.
+- `brain` (nerve ending) focuses on pure logic and ignores scheduling.
+
+### CPU Tracking
+
+`cpuTracker.begin(label)` / `end(label)` accumulates consumption into `cpuTracker.data`. Expose `global.cpu = () => cpuTracker.print()` in console to view historical usage at any time.
+
+### Extension Tips
+
+- To add new environmental stimuli, extend the return value of `coordinator.getContext()`.
+- If you need module priorities, reorder `moduleRegistry` entries or add an `order` field.
+- Each module call is wrapped with try/catch in `brainRunner`, so a faulty module only logs errors without crashing the entire tick.
